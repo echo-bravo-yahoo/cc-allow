@@ -203,6 +203,10 @@ func runEval(configPath string, sessionID string, hookMode, debugMode, postMode 
 	dispatcher := NewToolDispatcher(chain)
 	result := dispatcher.Dispatch(input)
 
+	// Doc-read gates: orthogonal post-pass that may escalate allow/ask to a deny
+	// carrying an injected doc. Fails open without a transcript (pipe mode).
+	result = applyDocGates(input, chain.Merged, result)
+
 	// Structured debug log entry
 	logDebugEval(input, result)
 	logDebug("decision: %s", result.Action)

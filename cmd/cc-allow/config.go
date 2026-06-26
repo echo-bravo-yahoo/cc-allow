@@ -24,6 +24,7 @@ type Config struct {
 	Glob     FileToolConfig   `toml:"glob"`     // glob tool configuration
 	Grep     FileToolConfig   `toml:"grep"`     // grep tool configuration
 	WebFetch WebFetchConfig   `toml:"webfetch"` // webfetch tool configuration
+	Gates    []DocGate        `toml:"gate"`     // doc-read gates (state-aware overlays)
 	Debug    DebugConfig      `toml:"debug"`    // debug settings
 	Settings SettingsConfig   `toml:"settings"` // general settings
 
@@ -417,6 +418,18 @@ type SettingsConfig struct {
 	SessionMaxAge string `toml:"session_max_age"` // e.g., "7d", "24h"
 }
 
+// DocGate is a state-aware overlay that keeps a required doc fresh in context.
+// On a matching tool call, the gate checks the session transcript for a recent
+// read or injection of the doc; if stale, it denies and injects the doc's full
+// contents into the deny reason. See gate.go for the evaluation logic.
+type DocGate struct {
+	Doc      string `toml:"doc"`      // required: doc to keep fresh ($HOME / ~ expanded)
+	Bash     string `toml:"bash"`     // matcher against the raw Bash command (re:/path: via ParsePattern)
+	WebFetch string `toml:"webfetch"` // matcher against a WebFetch URL
+	Window   int    `toml:"window"`   // freshness window in tool-call events (default 10)
+	Message  string `toml:"message"`  // optional preamble override before the injected doc
+}
+
 // Tracked holds a value of any type along with the config file path that set it.
 // The zero value represents "unset" - use IsSet() to check.
 type Tracked[T any] struct {
@@ -498,6 +511,7 @@ type MergedConfig struct {
 	Heredocs        []TrackedRule[HeredocRule]
 	Aliases         map[string]Alias // merged aliases from all configs
 	SafeBrowsing    SafeBrowsingConfig
+	Gates           []DocGate // doc-read gates concatenated across the config chain
 	Debug           DebugConfig
 	Settings        SettingsConfig
 }
