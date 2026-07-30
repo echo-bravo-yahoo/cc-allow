@@ -16,9 +16,10 @@ type CommandResolver struct {
 
 // ResolveResult represents the result of resolving a command name.
 type ResolveResult struct {
-	Path       string // absolute path to the command (empty if unresolved or builtin)
-	IsBuiltin  bool   // true if this is a shell builtin
-	Unresolved bool   // true if command could not be found
+	Path         string // absolute path to the command (empty if unresolved or builtin)
+	IsBuiltin    bool   // true if this is a shell builtin
+	Unresolved   bool   // true if command could not be found
+	OnSystemPath bool   // bare name exists on $PATH even if unresolved against allowed_paths
 }
 
 // NewCommandResolver creates a new CommandResolver.
@@ -45,6 +46,20 @@ func (r *CommandResolver) ResolveWithCwd(name string, effectiveCwd string) Resol
 	// Check if it's a builtin first
 	if IsBuiltin(name) {
 		return ResolveResult{IsBuiltin: true}
+	}
+
+	// Expand a leading ~ so `~/foo` resolves like `$HOME/foo` (which already
+	// works via dynamic-command handling). Mirrors ResolvePath in resolve.go;
+	// without this, `~/x` fell through the relative-path branch as literal
+	// "~/x" and was denied as unresolved.
+	if name == "~" || strings.HasPrefix(name, "~/") {
+		if home, err := os.UserHomeDir(); err == nil {
+			if name == "~" {
+				name = home
+			} else {
+				name = filepath.Join(home, name[2:])
+			}
+		}
 	}
 
 	// If the command is already an absolute path, just verify it exists
@@ -84,7 +99,11 @@ func (r *CommandResolver) ResolveWithCwd(name string, effectiveCwd string) Resol
 	r.cache[name] = path
 
 	if path == "" {
-		return ResolveResult{Unresolved: true}
+		onPath := false
+		if _, err := exec.LookPath(name); err == nil {
+			onPath = true
+		}
+		return ResolveResult{Unresolved: true, OnSystemPath: onPath}
 	}
 	return ResolveResult{Path: path}
 }

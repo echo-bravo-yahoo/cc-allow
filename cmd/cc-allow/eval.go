@@ -241,6 +241,18 @@ func (e *Evaluator) checkConstructs(info *ExtractedInfo) Result {
 	return result
 }
 
+// unresolvedMessage distinguishes a missing binary from a command that exists
+// on $PATH but not in the configured allowed_paths.
+func unresolvedMessage(name string, onSystemPath bool) string {
+	if !onSystemPath {
+		if strings.Contains(name, "/") {
+			return fmt.Sprintf("No such file %q (not found on disk)", name)
+		}
+		return fmt.Sprintf("Command %q is not installed (not found on PATH)", name)
+	}
+	return "Command not found in allowed paths"
+}
+
 // evaluateCommand checks a single command against the merged config.
 func (e *Evaluator) evaluateCommand(cmd Command) Result {
 	logDebug("  Evaluating command %q", cmd.Name)
@@ -281,7 +293,7 @@ func (e *Evaluator) evaluateCommand(cmd Command) Result {
 		if tv.Value == ActionDeny {
 			return Result{
 				Action:  ActionDeny,
-				Message: "Command not found in allowed paths",
+				Message: unresolvedMessage(cmd.Name, resolveResult.OnSystemPath),
 				Command: cmd.Name,
 				Source:  tv.Source + ": unresolved command",
 			}
@@ -383,7 +395,7 @@ func (e *Evaluator) evaluateCommand(cmd Command) Result {
 		if tv.Value == ActionAsk {
 			return Result{
 				Action:  ActionAsk,
-				Message: "Command not found in allowed paths",
+				Message: unresolvedMessage(cmd.Name, resolveResult.OnSystemPath),
 				Command: cmd.Name,
 				Source:  tv.Source + ": unresolved command requires approval",
 			}
