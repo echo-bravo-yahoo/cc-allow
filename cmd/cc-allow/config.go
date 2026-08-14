@@ -473,11 +473,14 @@ func (t Tracked[T]) IsSet() bool {
 }
 
 // TrackedRule wraps a rule of any type with source tracking and shadowing info.
+// Shadowing names the source of the rule this one displaced; ShadowedBy names the
+// source of the rule that displaced this one. Only one of the two is ever set.
 type TrackedRule[T any] struct {
-	Rule      T
-	Source    string
-	Shadowed  bool
-	Shadowing string
+	Rule       T
+	Source     string
+	Shadowed   bool
+	Shadowing  string
+	ShadowedBy string
 }
 
 // TrackedCommandEntry tracks a single command name in allow/deny lists.

@@ -55,6 +55,8 @@ func main() {
 	initMode := flag.Bool("init", false, "create project config at .config/cc-allow.toml")
 	suggestMode := flag.Bool("suggest-rule", false, "deterministically write a session allow-rule for an approved Read/Write/Edit/WebFetch/Glob/Grep, given PostToolUse hook JSON on stdin")
 	sessionID := flag.String("session", "", "session ID for session-scoped config lookup")
+	sessionPathMode := flag.Bool("session-config-path", false,
+		"print this session's config path, creating its directory and .gitignore if absent")
 	postMode := flag.Bool("post", false, "PostToolUse mode: also scan other sessions for matching rules (requires --hook)")
 
 	// Tool-specific modes (stdin is the path or command to check)
@@ -133,13 +135,30 @@ func main() {
 		os.Exit(0)
 	case *initMode:
 		os.Exit(int(runInit(*hookMode)))
+	case *sessionPathMode:
+		os.Exit(int(runSessionConfigPath(resolveSessionID(*sessionID, ""))))
 	case *fmtMode:
-		os.Exit(int(runFmt(*configPath, *sessionID)))
+		os.Exit(int(runFmt(*configPath, resolveSessionID(*sessionID, ""))))
 	case *suggestMode:
 		os.Exit(int(runSuggestRule()))
 	default:
 		os.Exit(int(runEval(*configPath, *agentType, *sessionID, *hookMode, *debugMode, *postMode, toolMode)))
 	}
+}
+
+// resolveSessionID picks the session id for config lookup: hook JSON wins, then
+// --session, then CLAUDE_CODE_SESSION_ID. The env fallback exists so a bare
+// `cc-allow --debug` run from inside a Claude Code Bash call evaluates against the
+// same session rules the real hook call sees; without it every verification run
+// silently tests a different ruleset than the one being fixed.
+func resolveSessionID(flagVal, hookVal string) string {
+	if hookVal != "" {
+		return hookVal
+	}
+	if flagVal != "" {
+		return flagVal
+	}
+	return os.Getenv("CLAUDE_CODE_SESSION_ID")
 }
 
 // runEval evaluates a tool request against the config chain.
@@ -154,11 +173,12 @@ func runEval(configPath string, agentType string, sessionID string, hookMode, de
 		return ExitError
 	}
 
-	// 2. Determine effective session ID: hook JSON overrides flag
-	effectiveSessionID := sessionID
-	if hookMode && input.SessionID != "" {
-		effectiveSessionID = input.SessionID
+	// 2. Determine effective session ID: hook JSON overrides flag, which overrides env
+	hookSessionID := ""
+	if hookMode {
+		hookSessionID = input.SessionID
 	}
+	effectiveSessionID := resolveSessionID(sessionID, hookSessionID)
 
 	// 2b. Hook JSON agent_type: use if no explicit --agent or --config was provided
 	if hookMode && agentType == "" && input.AgentType != "" && configPath == "" {

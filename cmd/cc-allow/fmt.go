@@ -51,6 +51,7 @@ func runFmt(configPath string, sessionID string) ExitCode {
 	var allRules []ruleWithScore
 	var allRedirects []redirectWithScore
 	var allHeredocs []heredocWithScore
+	var loaded []*Config
 	hasError := false
 
 	fmt.Println("Config Files")
@@ -64,6 +65,8 @@ func runFmt(configPath string, sessionID string) ExitCode {
 			hasError = true
 			continue
 		}
+
+		loaded = append(loaded, cfg)
 
 		fmt.Printf("\n[%d] %s\n", i+1, path)
 		fmt.Printf("    bash.default = %q\n", cfg.Bash.Default)
@@ -221,6 +224,10 @@ func runFmt(configPath string, sessionID string) ExitCode {
 		}
 	}
 
+	// Print rules dropped by the merge. A rule whose pattern is identical to an
+	// earlier one never competes on specificity, so it is dead config.
+	printShadowedRules(loaded)
+
 	// Print redirect rules
 	if len(allRedirects) > 0 {
 		fmt.Println("\n\nRedirect Rules (by specificity)")
@@ -251,6 +258,38 @@ func runFmt(configPath string, sessionID string) ExitCode {
 
 	fmt.Println("\n\nValidation passed.")
 	return ExitAllow
+}
+
+// printShadowedRules merges the loaded configs and reports every bash rule the
+// merge dropped. Shadowed rules are skipped before specificity scoring, so they
+// can never take effect; naming them here is the only place that says so.
+func printShadowedRules(configs []*Config) {
+	if len(configs) == 0 {
+		return
+	}
+	merged := MergeConfigs(configs)
+
+	var shadowed []TrackedRule[BashRule]
+	for _, tr := range merged.Rules {
+		if tr.Shadowed {
+			shadowed = append(shadowed, tr)
+		}
+	}
+	if len(shadowed) == 0 {
+		return
+	}
+
+	fmt.Println("\n\nShadowed Rules")
+	fmt.Println("==============")
+	fmt.Println("These rules have the same pattern as another rule and are dropped before")
+	fmt.Println("specificity scoring, so they never take effect. Add an args or pipe")
+	fmt.Println("condition to make a rule compete.")
+
+	for _, tr := range shadowed {
+		fmt.Printf("\n%s\n", formatRule(tr.Rule))
+		fmt.Printf("    source: %s\n", filepath.Base(tr.Source))
+		fmt.Printf("    shadowed by: %s\n", filepath.Base(tr.ShadowedBy))
+	}
 }
 
 func findFmtConfigFiles(explicitPath string, sessionID string) []string {

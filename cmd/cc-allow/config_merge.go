@@ -455,8 +455,10 @@ func mergeRules(merged []TrackedRule[BashRule], newRules []BashRule, newSource s
 				if newRule.Action.Priority() > existing.Rule.Action.Priority() {
 					tr.Shadowing = existing.Source
 					merged[i].Shadowed = true
+					merged[i].ShadowedBy = newSource
 				} else {
 					tr.Shadowed = true
+					tr.ShadowedBy = existing.Source
 				}
 				break
 			}

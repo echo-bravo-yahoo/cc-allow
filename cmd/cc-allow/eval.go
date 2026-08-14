@@ -342,6 +342,8 @@ func (e *Evaluator) evaluateCommand(cmd Command) Result {
 
 	for i, tr := range e.merged.Rules {
 		if tr.Shadowed {
+			logDebug("    Rule[%d] skipped: command=%q action=%s from %s is shadowed by an identical rule in %s",
+				i, tr.Rule.Command, tr.Rule.Action, tr.Source, tr.ShadowedBy)
 			continue
 		}
 		if result, matched := e.matchRule(tr, cmd); matched {
