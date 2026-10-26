@@ -1,0 +1,6 @@
+{
+  "feature": {
+    "parallel": [],
+    "ordered": ["just build", "just test"]
+  }
+}
